@@ -415,22 +415,5 @@ for(int i=0; i<tblBounty.RowCount; i++){
 	
 				project.SendInfoToLog("4");
 
-	//записываем новый старпост в ексель таблицу
-	tblBounty.SetCell(8, i, strStarpost);
-	//записываем старый старпост
-	tblBounty.SetCell(7, i, strText);
-	//записываем новый заголовок в ексель таблицу
-	tblBounty.SetCell(6, i, strNewTitle);
-	//записываем старый заголовок
-	tblBounty.SetCell(5, i, strOldTitle);
-	//записываем новую последнюю страницу
-	tblBounty.SetCell(3, i, strLastPage);
-	//заисываем ID последнего поста менеджера
-	if(strChangePostID=="ok"){
-		tblBounty.SetCell(4, i, strNewPostID);
-	}
-	else{
-		tblBounty.SetCell(4, i, strOldPostID);
-	}
 }
 
