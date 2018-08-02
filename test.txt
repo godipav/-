@@ -386,6 +386,8 @@ for(int i=0; i<tblBounty.RowCount; i++){
 		else{
 			project.SendInfoToLog("3");
 
+			ддддддддддддддддддддд
+			
 			elNext = Tab1.FindElementByXPath("//span[@class='prevnext'][1]/a[@class='navPages']", 0);
 			strNext = elNext.GetAttribute("innerHtml");
 			project.SendInfoToLog(strNext);
