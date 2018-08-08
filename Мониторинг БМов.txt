@@ -107,23 +107,43 @@ string strPostResultBody = "";
 //класс для работы с API Гугла
 OwnCode.GoogleAPI TableResult = new OwnCode.GoogleAPI();
 
+//получаем список менеджеров 
+string strFormat = String.Format("https://sheets.googleapis.com/v4/spreadsheets/1qPE3UxOdF6X-585-H4PgDmSJ5I6n7Y0Ezar40JEVGvg/values/Лист1!A2:E100?majorDimension=ROWS&fields=majorDimension,range,values&key=AIzaSyDJmP7AK2ySNpxt0KqfbRjwjYnxjb2Cyts");
+project.SendInfoToLog(strFormat);
 
-for(int i=0; i<tblListBMs.RowCount; i++){
+string strGetResult = ZennoPoster.HttpGet(strFormat, "", "UTF-8", ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly, 30000,"");
+project.SendInfoToLog(strGetResult);
+
+OwnCode.ListBMs ListBMs = JsonConvert.DeserializeObject<OwnCode.ListBMs>(strGetResult);
+project.SendInfoToLog(ListBMs.values.Count.ToString());
+
+for(int i=0; i<ListBMs.values.Count; i++){
 	project.SendInfoToLog(i.ToString());
 	
-	//берем название 
-	strStarpostOldDate = tblListBMs.GetCell(3,i);
-	project.SendInfoToLog(strStarpostOldDate);
+	List<string> lstRow  = ListBMs.values[i];
+	
+	//ник менеджера
+	strManagerNick = lstRow[0];
+	project.SendInfoToLog(strManagerNick);
 	
 	//берем ссылку на топик
-	strBMPostLink = tblListBMs.GetCell(1,i);
+	strBMPostLink = lstRow[1];
 	project.SendInfoToLog(strBMPostLink);
+	
+		
+	//заголовок последнего поста	
+	string strOldStarpostName = lstRow[2];
+	project.SendInfoToLog(strOldStarpostName);
+	
+	//берем дату последнего поста 
+	strStarpostOldDate = lstRow[3];
+	project.SendInfoToLog(strStarpostOldDate);
+	
 
-	//ник менеджера
-	strManagerNick = tblListBMs.GetCell(0,i);
-	project.SendInfoToLog(strManagerNick);
-
-
+	//ссылка на последний пост
+	string strOldStarpostLink = lstRow[4];
+	project.SendInfoToLog(strOldStarpostLink);
+	
 	//Tab Tab1 = instance.ActiveTab;
 	Tab1.Navigate(strBMPostLink);
 	Tab1.WaitDownloading();
@@ -141,8 +161,6 @@ for(int i=0; i<tblListBMs.RowCount; i++){
 //        strStarpostDate = "on: <b>Today</b> at 03:32:33 PM";
 		if(strStarpostDate.Contains("Today")){
 			strStarpostDate = Regex.Replace(strStarpostDate, @"<.*at", DateTime.Now.ToString("MMMM dd, yyyy,", new System.Globalization.CultureInfo("en-US")));
-			project.SendInfoToLog(strStarpostDate);
-		
 		}
 		
 		//сравниваем старую и новую дату
@@ -185,13 +203,25 @@ for(int i=0; i<tblListBMs.RowCount; i++){
 			strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
 			
 			//записываем только последний старпост(он берется первым)
-			if(z==0){
-				//записываем ссылку на новый топик в ексель таблицу
-				tblListBMs.SetCell(4, i, strStarpostLink);
-				//записываем дату нового топика
-				tblListBMs.SetCell(3, i, strStarpostDate);
-				//записываем заголовок в ексель таблицу
-				tblListBMs.SetCell(2, i, strStarpostName);
+			if(z==0){		
+				int intRowNumber = i + 2;
+				strDataRange = String.Format("A{0}:E{1}", intRowNumber, intRowNumber);
+				project.SendInfoToLog(strDataRange);
+
+				//записываем результат в гугл таблицу c помощью POST запросов
+				OwnCode.TableData NewPostData = new OwnCode.TableData();
+				NewPostData.majorDimension = "ROWS";
+				NewPostData.range = String.Format("'{0}'!{1}", strSheetName, strDataRange);
+				NewPostData.values = new List<List<string>>();
+				NewPostData.values.Add(new List<string>(){strManagerNick, strBMPostLink, strStarpostName, strStarpostDate, strStarpostLink});
+				project.SendInfoToLog(NewPostData.values.Count.ToString());
+
+				
+				//Грузим изменённые данные в таблицу
+				strPutContent = JsonConvert.SerializeObject(NewPostData);
+				strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/1qPE3UxOdF6X-585-H4PgDmSJ5I6n7Y0Ezar40JEVGvg/values/'{0}'!{1}?access_token={2}&valueInputOption=USER_ENTERED", strSheetName, strDataRange, GAuth.access_token);
+				strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+				
 			}
 			z++;
 		}
