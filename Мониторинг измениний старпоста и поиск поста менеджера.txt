@@ -1,3 +1,19 @@
+//string strProfilePath = project.Directory + @"\google_profile.zpprofile";
+//string strGAuthorizationPath = project.Directory + @"\authorization.json";
+//
+////Данные таблицы
+//string strTableId = "1w-YZD5yKN9OkHSmaGiiyi7Mk4Gj3IBQId7MPrCmgB1w";
+//string strSheetName = "Результаты";
+//string strDataRange = "A2:F2";
+//
+//string strClientCode = String.Empty;
+//OwnCode.GAuthorization GAuth = null;
+//
+//GAuth = JsonConvert.DeserializeObject<OwnCode.GAuthorization>(File.ReadAllText(strGAuthorizationPath));
+//project.SendInfoToLog(GAuth.ToString());
+
+
+
 
 Tab Tab1 = instance.ActiveTab;
 string strProfilePath = project.Directory + @"\google_profile.zpprofile";
@@ -14,7 +30,7 @@ string strPassword = "vjq1Frr2feyn";
 //Данные таблицы
 string strTableId = "18NXSeqoi736acaUP70a5Pj-ddRBAcuJkr7LfOFjS5xU";
 string strSheetName = "Лист1";
-string strDataRange = "A2:I2";
+string strDataRange = "A2:H2";
 string strAllNewsID = "1uKVFvtfajos5mOAr_1LeLkJEcjfaOt8LgtuofJpXTP0";
 
 string strClientCode = String.Empty;
@@ -106,11 +122,6 @@ string strChangePostID = "";
 string strAccessToken = GAuth.access_token;
 int intSheetID = 0;
 
-//Грузим изменённые данные в дневную таблицу
-string strPutContent = "";
-string strPutQuery = "";
-string strPostResultBody = "";
-
 
 string strCount = tblBounty.RowCount.ToString();
 project.SendInfoToLog(strCount);
@@ -118,27 +129,21 @@ project.SendInfoToLog(strCount);
 //класс для работы с API Гугла
 OwnCode.GoogleAPI TableResult = new OwnCode.GoogleAPI();
 
-//получаем список кампаний
-string strGetResult = ZennoPoster.HttpGet("https://sheets.googleapis.com/v4/spreadsheets/1N9anSUJ2q4o1BBMfZpAZVxPKxldqo2J6xPAxUKric_k/values/Лист1!A2:I200?majorDimension=ROWS&fields=majorDimension,range,values&key=AIzaSyDJmP7AK2ySNpxt0KqfbRjwjYnxjb2Cyts", "", "UTF-8", ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly, 30000,"");
-project.SendInfoToLog(strGetResult);
 
-OwnCode.CampaignData CampaignData = JsonConvert.DeserializeObject<OwnCode.CampaignData>(strGetResult);
-//return CampaignData.values.Count;
 
-for(int i=0; i<CampaignData.values.Count; i++){
+for(int i=0; i<tblBounty.RowCount; i++){
 	project.SendInfoToLog(i.ToString());
 	
-	List<string> lstRow  = CampaignData.values[i];
 	//берем название 
-	string strNameBounty = lstRow[0];
+	string strNameBounty = tblBounty.GetCell(0,i);
 	project.SendInfoToLog(strNameBounty);
 	
 	//берем ссылку на топик
-	string strBountyLink = lstRow[1];
+	string strBountyLink = tblBounty.GetCell(1,i);
 	project.SendInfoToLog(strBountyLink);
 
 	//ник менеджера
-	strManagerNick = lstRow[2];
+	strManagerNick = tblBounty.GetCell(2,i);
 	project.SendInfoToLog(strManagerNick);
 
 
@@ -146,15 +151,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	Tab1.Navigate(strBountyLink);
 	Tab1.WaitDownloading();
 	Thread.Sleep(2000);
-	
-	//если топик удален переходим к следующему
-	HtmlElement elCampaignRemoved = Tab1.FindElementByXPath("//td[@class='windowbg' and contains(text(),'The topic or board you are looking')]", 0);
-	if(!elCampaignRemoved.IsVoid){
-		continue;
-	}
-	//	string strTest = elCampaignRemoved.GetAttribute("innerHtml");
-//	project.SendInfoToLog(strTest);
-	
+
 	//забираем заголовок
 	HtmlElement elNewTitle = Tab1.FindElementByXPath("//td[@id='top_subject']", 0);
 	strNewTitle = elNewTitle.GetAttribute("innerHtml");
@@ -164,8 +161,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	project.SendInfoToLog(strNewTitle);
 
 	//берем старый заголовок
-	strOldTitle = lstRow[6];
-	strOldTitle = System.Net.WebUtility.HtmlDecode(strOldTitle);
+	strOldTitle = tblBounty.GetCell(6,i);
 	project.SendInfoToLog(strOldTitle);
 	
 	
@@ -185,9 +181,9 @@ for(int i=0; i<CampaignData.values.Count; i++){
 		TableResult.NewRow(intSheetID, strTableId, strAccessToken, 1, 2);
 
 		//Грузим изменённые данные в дневную таблицу
-		strPutContent = JsonConvert.SerializeObject(NewData);
-		strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
-		strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+		string strPutContent = JsonConvert.SerializeObject(NewData);
+		string strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
+		string strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
 				
 		
 		//добавить пустую строку в общую таблицу таблицу
@@ -220,8 +216,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	Thread.Sleep(1000);
 
 	//берем старый старпост
-	strText = lstRow[8];
-	strText = System.Net.WebUtility.HtmlDecode(strText);
+	strText = tblBounty.GetCell(8,i);
 	project.SendInfoToLog(strText);
 
 	//вставляем старый стапрост
@@ -279,9 +274,9 @@ for(int i=0; i<CampaignData.values.Count; i++){
 		TableResult.NewRow(intSheetID, strTableId, strAccessToken, 1, 2);
 
 		//Грузим изменённые данные в таблицу
-		strPutContent = JsonConvert.SerializeObject(NewData);
-		strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
-		strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+		string strPutContent = JsonConvert.SerializeObject(NewData);
+		string strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
+		string strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
 		
 		
 		//добавить пустую строку в общую таблицу таблицу
@@ -296,7 +291,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	}
 
 	//поиск поста менеджера
-	string strLastPage = lstRow[3];
+	string strLastPage = tblBounty.GetCell(3,i);
 	project.SendInfoToLog(strLastPage);
 	Tab1.Navigate(strLastPage);
 	Tab1.WaitDownloading();
@@ -305,7 +300,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	strChangePostID = "";
 	strNext = "";
 	
-	string strOldPostID = lstRow[4];
+	string strOldPostID = tblBounty.GetCell(4,i);
 	if(strOldPostID==""){
 		strOldPostID = "0";
 	}
@@ -346,9 +341,9 @@ for(int i=0; i<CampaignData.values.Count; i++){
 					TableResult.NewRow(intSheetID, strTableId, strAccessToken, 1, 2);
 
 					//Грузим изменённые данные в таблицу
-					strPutContent = JsonConvert.SerializeObject(NewData);
-					strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
-					strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+					string strPutContent = JsonConvert.SerializeObject(NewData);
+					string strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
+					string strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
 					//project.SendInfoToLog("Ответ сервера на запрос сохранения данных: " + strPostResultBody);
 					
 					
@@ -366,9 +361,11 @@ for(int i=0; i<CampaignData.values.Count; i++){
 				
 			}
 		}
+				project.SendInfoToLog("1");
 		
 		HtmlElement elNext = Tab1.FindElementByXPath("//span[@class='prevnext'][2]/a[@class='navPages']", 0);
 		if(!elNext.IsVoid){	
+			project.SendInfoToLog("2");
 
 			project.SendInfoToLog(strLastPage);
 			string strRegex = Regex.Match(strLastPage, @"(?<==).*").Value;
@@ -387,6 +384,7 @@ for(int i=0; i<CampaignData.values.Count; i++){
 			Thread.Sleep(1000);
 		}
 		else{
+			project.SendInfoToLog("3");
 
 			elNext = Tab1.FindElementByXPath("//span[@class='prevnext'][1]/a[@class='navPages']", 0);
 			strNext = elNext.GetAttribute("innerHtml");
@@ -415,24 +413,24 @@ for(int i=0; i<CampaignData.values.Count; i++){
 	}
 	while(strNext!="no");
 	
+				project.SendInfoToLog("4");
 
-	//записываем результат в гугл таблицу c помощью POST запросов
-	OwnCode.TableData NewBountyData = new OwnCode.TableData();
-	NewBountyData.majorDimension = "ROWS";
-	NewBountyData.range = String.Format("'{0}'!{1}", strSheetName, strDataRange);
-	NewBountyData.values = new List<List<string>>();
-	//если новый пост менеджера найден записываем его ID в таблицу(переменная strNewPostID). если не найден записывем старый ID(strOldPostID)
+	//записываем новый старпост в ексель таблицу
+	tblBounty.SetCell(8, i, strStarpost);
+	//записываем старый старпост
+	tblBounty.SetCell(7, i, strText);
+	//записываем новый заголовок в ексель таблицу
+	tblBounty.SetCell(6, i, strNewTitle);
+	//записываем старый заголовок
+	tblBounty.SetCell(5, i, strOldTitle);
+	//записываем новую последнюю страницу
+	tblBounty.SetCell(3, i, strLastPage);
+	//заисываем ID последнего поста менеджера
 	if(strChangePostID=="ok"){
-		NewBountyData.values.Add(new List<string>(){strNameBounty, strBountyLink, strManagerNick, strLastPage, strNewPostID, strOldTitle, strNewTitle, strText, strStarpost});
+		tblBounty.SetCell(4, i, strNewPostID);
 	}
 	else{
-		NewBountyData.values.Add(new List<string>(){strNameBounty, strBountyLink, strManagerNick, strLastPage, strOldPostID, strOldTitle, strNewTitle, strText, strStarpost});
+		tblBounty.SetCell(4, i, strOldPostID);
 	}
-	
-	//Грузим изменённые данные в таблицу
-	strPutContent = JsonConvert.SerializeObject(NewBountyData);
-	strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/1N9anSUJ2q4o1BBMfZpAZVxPKxldqo2J6xPAxUKric_k/values/'{0}'!{1}?access_token={2}&valueInputOption=USER_ENTERED", strSheetName, strDataRange, GAuth.access_token);
-	strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
-	//project.SendInfoToLog("Ответ сервера на запрос сохранения данных: " + strPostResultBody);
 }
 
