@@ -1,0 +1,239 @@
+Tab Tab1 = instance.ActiveTab;
+string strProfilePath = project.Directory + @"\google_profile.zpprofile";
+string strGAuthorizationPath = project.Directory + @"\authorization.json";
+
+//Данные приложения
+string strClientId = "671963810339-3ohkcor4r03ml2lvo67o28j0lo2p1dqi.apps.googleusercontent.com";
+string strClientSecret = "-KDsi19MARaMwinO53D4IOwX";
+
+//Данные акаунта который будет редактировать таблицу (должен иметь доступ к этой таблице)
+string strAccount = "godipav@gmail.com";
+string strPassword = "vjq1Frr2feyn";
+
+//Данные таблицы
+string strTableId = "12fCBxlR3hdETk3AYGf05t-yNGspES82nCmEmKk6VoE4";
+string strSheetName = "Результат";
+string strDataRange = "A2:H2";
+
+string strClientCode = String.Empty;
+OwnCode.GAuthorization GAuth = null;
+
+bool blnAutoriz = true;
+while(blnAutoriz){
+	if (File.Exists(strGAuthorizationPath)){
+	  GAuth = JsonConvert.DeserializeObject<OwnCode.GAuthorization>(File.ReadAllText(strGAuthorizationPath));
+	  project.SendInfoToLog(GAuth.ToString());
+	}
+	else{
+	  if (File.Exists(strProfilePath)){
+	    project.Profile.Load(strProfilePath);
+	  }else{
+	    Tab1.Navigate("https://accounts.google.com/ServiceLogin?hl=ru&passive=true&continue=https://www.google.com/%3Fgws_rd%3Dssl");
+	    Tab1.WaitDownloading();
+
+	    Tab1.FindElementById("identifierId").SetValue(strAccount, "Full");
+	    Tab1.FindElementById("identifierNext").Click();
+	    Thread.Sleep(3000);
+	    Tab1.FindElementByXPath("//input[@name='password']", 0).SetValue(strPassword, "Full");
+	    Tab1.FindElementById("passwordNext").Click();
+	    Thread.Sleep(3000);
+
+	    project.Profile.Save(strProfilePath);
+	  }
+	  
+	  string strVariableScope = "https://www.googleapis.com/auth/spreadsheets";
+
+	  string strAuthPage = String.Format("https://accounts.google.com/o/oauth2/auth?client_id={0}&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope={1}&response_type=code", strClientId, strVariableScope);
+	  Tab1.Navigate(strAuthPage);
+	  Tab1.WaitDownloading();
+
+	  Tab1.FindElementByXPath("//div[@role='button']", 0).Click();
+	  Tab1.WaitDownloading();
+	  Tab1.FindElementById("submit_approve_access").Click();
+	  Tab1.WaitDownloading();
+
+	  strClientCode = Tab1.FindElementById("code").GetAttribute("value");
+	  project.SendInfoToLog("Получен client code: " + strClientCode);
+	  
+	  string strAuthQueryData = String.Format("code={0}&client_id={1}&client_secret={2}&redirect_uri=urn:ietf:wg:oauth:2.0:oob&grant_type=authorization_code", 
+	    strClientCode, strClientId, strClientSecret);
+
+	  string strAuthResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.POST, "https://accounts.google.com/o/oauth2/token", strAuthQueryData, respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+	  File.WriteAllText(strGAuthorizationPath, strAuthResultBody);
+	  GAuth = JsonConvert.DeserializeObject<OwnCode.GAuthorization>(strAuthResultBody);
+	}
+
+	string strGetQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/{1}!A1:B1?access_token={2}", strTableId, strSheetName, GAuth.access_token);
+	string strGetResultBody = ZennoPoster.HttpGet(strGetQuery, "", "UTF-8", ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly, 30000,"");
+	project.SendInfoToLog(strGetResultBody);
+	if (strGetResultBody.Contains("UNAUTHENTICATED")||strGetResultBody.Contains("PERMISSION_DENIED")){
+		File.Delete(strGAuthorizationPath);
+	//  string strRefreshQueryData = String.Format("client_id={0}&client_secret={1}&refresh_token={2}&grant_type=refresh_token", 
+	//    strClientId, strClientSecret, GAuth.refresh_token);
+	//
+	//  string strRefreshResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.POST, "https://accounts.google.com/o/oauth2/token", strRefreshQueryData, respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+	//  
+	//
+	//  File.WriteAllText(strGAuthorizationPath, strRefreshResultBody);
+	//  GAuth = JsonConvert.DeserializeObject<OwnCode.GAuthorization>(strRefreshResultBody);  
+	  
+	}
+	else{
+		blnAutoriz = false;
+	}
+}
+
+
+IZennoTable tblListBMs = project.Tables["ListBMs"];
+IZennoList lstListBMs = project.Lists["ListBMs"];
+
+string strStarpostDate = "";
+string strStarpostName = "";
+string strStarpostLink = "";
+string strManagerNick = "";
+string strBMPostLink = "";
+string strStarpostOldDate = "";
+string strAccessToken = GAuth.access_token;
+int intSheetID = 0;  
+string strBMNot = "";
+int a=0;
+string strDateTime = "";
+string strNewBMPostLink = "";
+string strNewTopocName = "";
+string strNewTopocDateTime = "";
+string strNewTopocPostLink = "";
+int intNumbersRows = 0;
+
+//класс для работы с API Гугла
+OwnCode.GoogleAPI TableResult = new OwnCode.GoogleAPI();
+
+string strGetResult = "";
+
+//получаем результаты изменений за день
+strGetResult = ZennoPoster.HttpGet("https://sheets.googleapis.com/v4/spreadsheets/1IbWObcMiEKK0PH-NwkzUaqzIANA17yHrHHsz_GjA0kE/values/Лист1!A2:H200?majorDimension=ROWS&fields=majorDimension,range,values&key=AIzaSyDJmP7AK2ySNpxt0KqfbRjwjYnxjb2Cyts", "", "UTF-8", ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly, 30000,"");
+project.SendInfoToLog(strGetResult);	
+
+OwnCode.Results Results = JsonConvert.DeserializeObject<OwnCode.Results>(strGetResult);
+intNumbersRows = Results.values.Count;
+project.SendInfoToLog("Количество кампаний: " + intNumbersRows.ToString());
+
+
+//получаем список кампаний пользователя
+string strFormat = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/Список БМов!A1:C100?majorDimension=ROWS&fields=majorDimension,range,values&key=AIzaSyDJmP7AK2ySNpxt0KqfbRjwjYnxjb2Cyts", strTableId);
+project.SendInfoToLog(strFormat);
+
+strGetResult = ZennoPoster.HttpGet(strFormat, "", "UTF-8", ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly, 30000,"");
+project.SendInfoToLog(strGetResult);
+
+OwnCode.ListBMs ListBMs = JsonConvert.DeserializeObject<OwnCode.ListBMs>(strGetResult);
+project.SendInfoToLog(ListBMs.values.Count.ToString());
+//	if(ListBMs.values.Count==1){
+//		continue;
+//	}
+
+//перебираем все кампании
+for (int c=1; c<ListBMs.values.Count; c++){
+	List<string> lstRow2  = ListBMs.values[c];
+	project.SendInfoToLog(lstRow2.Count.ToString());
+	
+	strManagerNick = lstRow2[0];
+	//проверяем участника не задублировал ли он свой ник!!!!!!!!!
+	project.SendInfoToLog(strManagerNick);
+
+	strBMPostLink = lstRow2[1];
+	project.SendInfoToLog(strBMPostLink);
+	
+	
+//		strBountyLink = "";
+	strNewBMPostLink = "";
+
+
+	//перебираем изменненные кампании и сравниваем с кампаниями юзера
+	for (int x=0; x<Results.values.Count; x++){
+		if(!lstListBMs.Contains(strBMPostLink)){
+			strBMNot = "no";
+			break;
+		}
+		else{
+			strBMNot = "";
+			List<string> lstRow3  = Results.values[x];
+			strDateTime = lstRow3[0];
+			if(strDateTime.Contains("Нет постов за день.")){
+				TableResult.DeleteRows(0, "1IbWObcMiEKK0PH-NwkzUaqzIANA17yHrHHsz_GjA0kE", strAccessToken, 1, 2);
+				return "Нет постов за день.";
+			}
+			strManagerNick = lstRow3[1];
+			strNewBMPostLink = lstRow3[2];
+			strNewTopocName = lstRow3[3];
+			strNewTopocDateTime = lstRow3[4];
+			strNewTopocPostLink = lstRow3[5];
+			
+			
+			project.SendInfoToLog("Результаты. Ячейка: " + x.ToString() + "  Link  " + strBMPostLink);
+			//если совпадение найдено берем строку из таблицы с результатами
+			if(strNewBMPostLink==strBMPostLink){
+				
+				OwnCode.TableData NewData = new OwnCode.TableData();
+				NewData.majorDimension = "ROWS";
+				NewData.range = String.Format("'{0}'!{1}", strSheetName, strDataRange);
+				NewData.values = new List<List<string>>();
+				NewData.values.Add(new List<string>(){strDateTime, strManagerNick, strBMPostLink, strNewTopocName, strNewTopocDateTime, strNewTopocPostLink});
+				
+				//добавить пустую строку в таблицу
+//					OwnCode.GoogleAPI TableResult = new OwnCode.GoogleAPI();
+				TableResult.NewRow(intSheetID, strTableId, strAccessToken, 1, 2);
+
+				//Грузим изменённые данные в таблицу
+				string strPutContent = JsonConvert.SerializeObject(NewData);
+				string strPutQuery = String.Format("https://sheets.googleapis.com/v4/spreadsheets/{0}/values/'{1}'!{2}?access_token={3}&valueInputOption=USER_ENTERED", strTableId, strSheetName, strDataRange, GAuth.access_token);
+				string strPostResultBody = ZennoPoster.HTTP.Request(ZennoLab.InterfacesLibrary.Enums.Http.HttpMethod.PUT, strPutQuery, strPutContent, "application/json", respType:ZennoLab.InterfacesLibrary.Enums.Http.ResponceType.BodyOnly);
+				//project.SendInfoToLog("Ответ сервера на запрос сохранения данных: " + strPostResultBody);
+				
+				continue;
+				
+			}
+
+		}
+		a++;
+		if(a==tblListBMs.RowCount) break;
+	}
+
+	if(strBMNot=="no"){
+		//если нет парсим старпост и добавляем строку в таблицу
+		Tab1.Navigate(strBMPostLink);
+		Tab1.WaitDownloading();
+		Thread.Sleep(2000);
+		
+		HtmlElementCollection colStarposts = Tab1.FindElementsByXPath("//tr[@class='titlebg2']");
+		foreach(HtmlElement elStarpost in colStarposts){
+			strStarpostDate = elStarpost.FindChildByXPath(".//td", 2).GetAttribute("innerHtml");
+			strStarpostDate = strStarpostDate.Trim();
+			if(strStarpostDate.Contains("Today")){
+				strStarpostDate = Regex.Replace(strStarpostDate, @"<.*at", DateTime.Now.ToString("MMMM dd, yyyy,", new System.Globalization.CultureInfo("en-US")));
+			}
+			project.SendInfoToLog(strStarpostDate);
+				
+		    strStarpostName = elStarpost.FindChildByXPath(".//td/a", 2).GetAttribute("innerHtml");
+			strStarpostName = System.Net.WebUtility.HtmlDecode(strStarpostName);
+			project.SendInfoToLog(strStarpostName);
+			strStarpostLink = elStarpost.FindChildByXPath(".//td/a", 2).GetAttribute("href");
+			project.SendInfoToLog(strStarpostLink);
+				
+			break;
+		}
+
+		
+			//добавляем баунти в список
+			lstListBMs.Add(strBMPostLink);
+			//добавляем в таблицу кампанию и старпост
+			tblListBMs.AddRow(new String[]{strManagerNick, strBMPostLink, strStarpostName, strStarpostDate, strStarpostLink});
+	}
+
+}
+
+
+int intEndIndex = intNumbersRows + 1;
+//удаляем все строки из таблицы
+TableResult.DeleteRows(0, "1IbWObcMiEKK0PH-NwkzUaqzIANA17yHrHHsz_GjA0kE", strAccessToken, 1, intEndIndex);
+
+project.SendInfoToLog("Гуд!))");
